@@ -75,6 +75,7 @@ class Size(CachingMixin, models.Model):
 	
 	aspect_ratio = models.FloatField(default=1)
 	
+	crop_on_request = models.BooleanField(default=False, help_text="Determines if thumbnails should not be made until first requested by template")
 	
 	def save(self, *args, **kwargs):
 		if not self.height:
@@ -120,7 +121,12 @@ class Crop(CachingMixin, models.Model):
 		super(Crop, self).save(*args, **kwargs)
 
 		if self.size:
-			sizes = Size.objects.all().filter(aspect_ratio=self.size.aspect_ratio, size_set=self.size.size_set).exclude(auto_size=1).order_by("-width")
+			sizes = Size.objects.all().filter(
+				aspect_ratio=self.size.aspect_ratio, 
+				size_set=self.size.size_set, 
+				crop_on_request=0
+			).exclude(auto_size=1).order_by("-width")
+			
 			if sizes:
 				cropped_image = utils.create_cropped_image(self.image.image.path, self.crop_x, self.crop_y, self.crop_w, self.crop_h)
 					
@@ -137,22 +143,26 @@ class Crop(CachingMixin, models.Model):
 class Image(CachingMixin, models.Model):
 	
 	objects = CachingManager()
+	
 	image = models.ImageField(
 		upload_to=settings.CROPDUSTER_UPLOAD_PATH + "%Y/%m/%d", 
 		max_length=255, 
 		db_index=True
 	)
+	
 	size_set = models.ForeignKey(
 		SizeSet,
 	)
+	
 	attribution = models.CharField(max_length=255, blank=True, null=True)
+	
 	caption = models.CharField(max_length=255, blank=True, null=True)
 
 	def save(self, *args, **kwargs):
 
 		super(Image, self).save(*args, **kwargs)
 
-		for size in self.size_set.size_set.all().filter(auto_size=1):
+		for size in self.size_set.size_set.all().filter(auto_size=1, crop_on_request=0):
 			if self.image.width > size.width and self.image.height > size.height:
 				thumbnail = utils.rescale(pil.open(self.image.path), size.width, size.height, crop=True)
 				if not os.path.exists(self.folder_path):
@@ -164,6 +174,16 @@ class Image(CachingMixin, models.Model):
 				if not os.path.exists(self.folder_path):
 					os.makedirs(self.folder_path)
 				thumbnail.save(self.thumbnail_path(size), **IMAGE_SAVE_PARAMS)
+				
+				
+	def create_thumbnail(self, size_name):
+		try:
+			size = Size.objects.get(slug=size_name)
+			thumbnail = utils.rescale(pil.open(self.image.path), size.width, size.height, crop=True)
+			thumbnail.save(self.thumbnail_path(size), **IMAGE_SAVE_PARAMS)
+			return True
+		except Size.DoesNotExist:
+			return False
 
 	class Meta:
 		db_table = "cropduster_image"
