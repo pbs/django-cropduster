@@ -164,24 +164,37 @@ class Image(CachingMixin, models.Model):
 
 		for size in self.size_set.size_set.all().filter(auto_size=1, crop_on_request=0):
 			if self.image.width > size.width and self.image.height > size.height:
+			
 				thumbnail = utils.rescale(pil.open(self.image.path), size.width, size.height, crop=True)
+				
 				if not os.path.exists(self.folder_path):
 					os.makedirs(self.folder_path)
 						
 				thumbnail.save(self.thumbnail_path(size), **IMAGE_SAVE_PARAMS)
+				
 			else:
 				thumbnail = pil.open(self.image.path)
+				
 				if not os.path.exists(self.folder_path):
 					os.makedirs(self.folder_path)
+					
 				thumbnail.save(self.thumbnail_path(size), **IMAGE_SAVE_PARAMS)
 				
 				
 	def create_thumbnail(self, size_name):
 		try:
 			size = Size.objects.get(slug=size_name)
-			thumbnail = utils.rescale(pil.open(self.image.path), size.width, size.height, crop=True)
-			thumbnail.save(self.thumbnail_path(size), **IMAGE_SAVE_PARAMS)
-			return True
+			
+			try:
+				thumbnail = utils.rescale(pil.open(self.image.path), size.width, size.height, crop=True)
+			
+				thumbnail.save(self.thumbnail_path(size), **IMAGE_SAVE_PARAMS)
+			
+				return True
+				
+			except IOError:
+				return False
+			
 		except Size.DoesNotExist:
 			return False
 
