@@ -24,7 +24,6 @@ def get_image(image, size_name="large", template_name="image.html", width=None, 
 		
 		# Check if the file doesnt exist and its set to crop on request
 		if crop_on_request and image_size.crop_on_request and not os.path.exists(image.thumbnail_path(image_size)):
-			import ipdb;ipdb.set_trace()
 			image.create_thumbnail(size_name)
 			
 		image_url = image.thumbnail_url(size_name)
