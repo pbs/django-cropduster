@@ -16,6 +16,7 @@ from django.forms import ModelForm, ValidationError
 
 BROWSER_WIDTH = 800
 
+LEGAL_IMAGE_FORMATS = ('JPEG','GIF','PNG')
 
 # Create the form class.
 class ImageForm(ModelForm):
@@ -35,6 +36,11 @@ class ImageForm(ModelForm):
 				pil_image = pil.open(image)
 			except:
 				raise ValidationError("Unable to open image file")
+
+			if pil_image.format not in LEGAL_IMAGE_FORMATS:
+				raise ValidationError("Cropduster doesn't support %s files.  "\
+									  "Please upload images in the following formats: %s"\
+									  % (pil_image.format, '/'.join(LEGAL_IMAGE_FORMATS)))
 				
 			for size in size_set.size_set.all():
 				if not size.auto_size and (size.width > pil_image.size[0] or size.height > pil_image.size[1]):
