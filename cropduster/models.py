@@ -3,9 +3,10 @@ from django.conf import settings
 import os
 from decimal import Decimal
 from cropduster import utils
-from PIL import Image as pil
+from PIL import Image as pil, ImageFile
 
-IMAGE_SAVE_PARAMS =  {"quality" :95}
+ImageFile.MAXBLOCK = 10000000
+IMAGE_SAVE_PARAMS =  {"quality" :80, "optimize": 1}
 
 try:
 	from caching.base import CachingMixin, CachingManager
