@@ -1,6 +1,7 @@
 import os
 import copy
 from itertools import count
+import re
 
 from PIL import Image as pil
 
@@ -8,9 +9,12 @@ from django.forms import ModelForm, ValidationError, HiddenInput
 from django.views.decorators.csrf import csrf_exempt
 from django.shortcuts import render_to_response
 from django.template import RequestContext
+from django.http import Http404, HttpResponse
+from django.utils import simplejson
 
 from cropduster.models import Image, Crop, Size, SizeSet, ImageMetadata, ImageRegistry
 from collections import namedtuple
+
 
 BROWSER_WIDTH = 800
 
@@ -201,7 +205,7 @@ def min_size(size_set):
     return width, height
 
 def upload_image(request, image_form=None, metadata_form=None):
-    size_set = SizeSet.objects.get(id=request.GET['size_set'])
+    size_set = SizeSet.objects.get(slug=request.GET['size_set'])
     if image_form is None:
         image = get_image(request)
         image_form = ImageForm(instance=image)
@@ -226,7 +230,7 @@ def upload_image(request, image_form=None, metadata_form=None):
     return render_to_response('admin/upload_image.html', context)
 
 def upload_crop_images(request):
-    size_set = SizeSet.objects.get(id=request.GET['size_set'])
+    size_set = SizeSet.objects.get(slug=request.GET['size_set'])
     image = get_image(request)
 
     # We need to inject the size set id into the form data,
@@ -335,3 +339,37 @@ def dispatch_stage(request):
 @csrf_exempt
 def upload(request):
     return dispatch_stage(request)
+
+
+slug_tester = re.compile(r'^[\w-]+$')
+@csrf_exempt
+def ajax_derived_images(request):
+    """
+    Returns a list of derived items for a given image and size set.
+
+    @param request: Django Request
+    @type  request: Django Request
+    
+    @return: JSON representation of the images.
+    @rtype: "[{src: "src", width: int, height: int}, ...]"
+    """
+    image_id = request.GET.get('id', '')
+    if not image_id.isdigit():
+        image_id = -1
+    try:
+        image = Image.objects.get(id=int(image_id))
+    except Image.DoesNotExist:
+        raise Http404
+
+    size_slug = request.GET.get('slug', '')
+    if slug_tester.match(size_slug) is None:
+        raise Http404
+
+    derived_images = []
+    for img in image.derived.filter(size__size_set__slug=size_slug):
+        derived_images.append(dict(src = img.get_absolute_url(),
+                                   height = img.height,
+                                   width = img.width,
+                                   manual = not img.size.auto_crop))
+
+    return HttpResponse(simplejson.dumps(derived_images), mimetype="application/json")
