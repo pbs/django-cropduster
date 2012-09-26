@@ -26,7 +26,7 @@ $(document).ready(function(){
         $thumb.append('<a target="_blank" href="{{thumb|safe}}"><img src="{{ thumb|safe }}" /></a>');
 	{% endfor %}
     {% if image_thumbs %}
-        $manual.show();
+        $manual.fadeIn();
         $parent.find(".cropduster-tools .delete-handler").show();
     {% endif %}
     window.close();

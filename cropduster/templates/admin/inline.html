@@ -74,7 +74,7 @@ if(window.cropduster_pop === undefined) {
             var $cd_anchor = $('a' + attr);
             var current = $cd_anchor.attr('data-size_set');
 
-            // If nothin has changed, nothing to do.  Otherwise update it.
+            // If nothing has changed, nothing to do.  Otherwise update it.
             if(current === slug) return;
 
             $cd_anchor.attr('data-size_set', slug);
@@ -85,24 +85,26 @@ if(window.cropduster_pop === undefined) {
             var $thumbs_cont = $manual.find('div.thumbs');
             $manual.fadeOut(500, function() {
                 $thumbs_cont.children('a').remove();
+
+                // If nay_jax is set to true, cropduster won't try to
+                // auto load manual images for the given size.  Otherwise,
+                // go for it.
+                if(nay_jax) return;
+
+                // Grab the derived images and add them to the appropriate place.
+                $.getJSON("{{cropduster_derived}}", {id: get_cd_by_field(field_name),
+                                                     slug: slug},
+                    function(data) {
+                        if(data.length > 0) {
+                            $manual.fadeIn();
+                        }
+                        for(var i = 0; i < data.length; i++) {
+                            add_img($thumbs_cont, data[i].src);
+                        }
+                    });
+
             });
 
-            // If nay_jax is set to true, cropduster won't try to
-            // auto load manual images for the given size.  Otherwise,
-            // go for it.
-            if(nay_jax) return;
-
-            // Grab the derived images and add them to the appropriate place.
-            $.getJSON("{{cropduster_derived}}", {id: get_cd_by_field(field_name),
-                                                 slug: slug},
-                function(data) {
-                    for(var i = 0; i < data.length; i++) {
-                        add_img($thumbs_cont, data[i].src);
-                    }
-                    if(data.length > 0) {
-                        $manual.fadeIn();
-                    }
-                });
         }
         window.toggle_delete = function(obj){
             var container = $(obj).parent().parent().parent().parent();
