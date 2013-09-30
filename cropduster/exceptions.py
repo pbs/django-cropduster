@@ -4,6 +4,7 @@ import logging
 import copy
 import errno
 
+from django.core.exceptions import ImproperlyConfigured
 from django.http import HttpResponse
 from django.utils.safestring import mark_safe
 
@@ -19,7 +20,7 @@ try:
 except ImportError:
     try:
         from raven.contrib.django.models import get_client
-    except ImportError:
+    except (ImportError, ImproperlyConfigured):
         pass
     else:
         raven_client = get_client()
