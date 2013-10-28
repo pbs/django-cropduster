@@ -834,6 +834,9 @@ class ImageContextManager(models.Manager):
 class ImageContext(models.Model):
     size_set = models.ForeignKey(SizeSet, blank=True, null=True)
 
+    #The standard fields for a GenericForeignKey.
+    # It may points to whatever model object without
+    # hardcoding the class of the related model
     content_type = models.ForeignKey(ContentType)
     object_id = models.PositiveIntegerField()
     content_object = generic.GenericForeignKey('content_type', 'object_id')

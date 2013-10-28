@@ -4,6 +4,7 @@ from cropduster.models import Size, SizeSet
 
 class SizeInline(admin.TabularInline):
     model = Size
+    #commented fields as they might confuse the user
 #    prepopulated_fields = {'slug': ('name',)}
     fieldsets = (
         (None, {
