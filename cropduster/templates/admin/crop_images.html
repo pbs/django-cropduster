@@ -15,20 +15,20 @@
 	<form method="post" action="" enctype="multipart/form-data">
         <input name="next_stage" type="hidden" value="{{next_stage}}" />
         <input name="current_stage" type="hidden" value="{{current_stage}}" />
-        
+
         <input type="hidden" name="image_id" value="{{ image.id }}" />
         <h2>Please crop the images to the desired proportions</h2>
         <input type="hidden" name="total_crops" value="{{crops|length}}" />
         {% for ids, dims, crop in crops %}
             <input type="hidden" name="crop_ids_{{forloop.counter0}}" value="{{ ids }}" />
             <div style="display: none">
-            {% for field in crop %} 
-                {{ field }} 
+            {% for field in crop %}
+                {{ field }}
             {% endfor %}
             </div>
-            <img data-aspect_ratio="{{dims.ar}}" 
-                 data-min_width="{{dims.width}}" 
-                 data-min_height="{{dims.height}}" 
+            <img data-aspect_ratio="{{dims.ar}}"
+                 data-min_width="{{dims.width}}"
+                 data-min_height="{{dims.height}}"
                  data-start_x="{{crop.crop_x.value}}"
                  data-start_y="{{crop.crop_y.value}}"
                  data-start_w="{{crop.crop_w.value}}"
@@ -38,18 +38,18 @@
             <br/>
         {% endfor %}
 
-<script type="text/javascript">	
+<script type="text/javascript">
 (function($){
 
-	var image_width = {{ image.width }};
-	var image_height = {{ image.height }};
+	var image_width = {{ image.image.width }};
+	var image_height = {{ image.image.height }};
 	var max_width = {{ browser_width }};
 
     var scale = (function() {
         if(image_width > max_width) {
             return function (val, ratio){
                 return Math.round(val * ratio);
-            } 
+            }
         } else{
             return function(val, ratio) {
                 return val;
@@ -63,7 +63,7 @@
 	function scale_down(val){
 		return val === null ? null : Math.round(scale(val, max_width/image_width));
 	}
-	
+
     /* JCrop can return negative X/Y coordinates when the image is exact, so fix it */
     function normalize_crop(c) {
         if(c.x < 0) {
@@ -132,7 +132,7 @@
     }
 
 	$(document).ready(function(){
-        
+
         $("form img").each(function(i) {
             var dims = parse_img(this);
 
@@ -140,17 +140,14 @@
             var offset_x=0, offset_y=0;
             var start_x2, start_y2;
             if(dims.start_w === 0) {
-                var mins = scale_mins(dims.aspect_ratio,
-                                      image_width,
-                                      image_height);
-                start_x2 = mins.x;
-                start_y2 = mins.y;
+                start_x2 = dims.min_width;
+                start_y2 = dims.min_height;
 
                 // Center it if possible
                 offset_x = Math.floor((scale_down(image_width) - start_x2)/2);
                 offset_y = Math.floor((scale_down(image_height) - start_y2)/2);
 
-                // Update the form data 
+                // Update the form data
                 updateCrop(i)({x: offset_x, y: offset_y, w: start_x2, h: start_y2 });
             } else {
                 start_x2 = dims.start_x + dims.start_w;
@@ -158,21 +155,38 @@
             }
 
             $(this).Jcrop({
-                "setSelect":   [ 
-                    offset_x + dims.start_x, 
-                    offset_y + dims.start_y, 
+                "setSelect":   [
+                    offset_x + dims.start_x,
+                    offset_y + dims.start_y,
                     offset_x + start_x2,
                     offset_y + start_y2
                 ],
                 "minSize":[dims.min_width||1, dims.min_height||1],
                 "aspectRatio": dims.aspect_ratio,
-                "onChange": updateCrop(i)
+                "onChange": updateCrop(i),
+                "allowSelect": false,
             });
+        });
+        $( "#upload-button").click(function() {
+                 var frm = $('#content-main form');
+                 $("body").append('<div class="loading" style="height:' + $('body').innerHeight() +'px;"><span></span></div>');
+                 $.ajax({
+                     url: frm.attr("action"),
+                     data: frm.serialize(),
+                     success: function (data){
+                        window.dismissRelatedImageLookupPopup(window, data.id, data.chosenThumbnailUrl, data.chosenDescriptionTxt);
+                     },
+                     error: function(xhr){
+                        window.dismissRelatedImageLookupPopup(window, -1, '', '');
+                     }
+                 });
+
+                 return false;
         });
     });
 }(window.django && django.jQuery ?django.jQuery : $));
 </script>
-	
+
 
 	<div id="crop_formset">
 	{{ crop_formset.management_form }}
@@ -181,9 +195,9 @@
 			{{ form }}
 		</p>
 	{% endfor %}
-   
+
 	</div>
-     
+
 	<div class="module footer" id="upload-footer">
         <ul class="submit-row">
             <li class="submit-button-container">
@@ -197,7 +211,7 @@
         document.forms[0].submit();
         </script>
     {% endif %}
-	
+
 </div>
 {% endblock %}
 
