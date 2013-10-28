@@ -409,8 +409,6 @@ class Image(CachingMixin, models.Model):
             image = utils.rescale(image, width, height, size.auto_crop)
 
         return image
-        # Save the image in a temporary place
-        #self._new_image, self._new_image_format = self._save_to_tmp(image)
 
     def _get_tmp_img_path(self):
         """
