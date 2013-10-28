@@ -177,6 +177,8 @@ def copy_image(image):
     image.format = img_format
     return image
 
+#Inspired (or adapted, but not copy-pasted) from
+# filer.admin.cliboardadmin.ClipboardAdmin.ajaxUpload.
 
 def save_cropped_img_to_filer(request, filer_img, cropped_pil_img):
     timestamp = time.strftime("%Y%m%d%S")
@@ -212,6 +214,7 @@ def save_cropped_img_to_filer(request, filer_img, cropped_pil_img):
 
         tools.move_files_from_clipboard_to_folder(request, clipboard,
                                                   filer_img.image.folder)
+        clipboard_item.delete()
         clipboard.files.clear()
         return file_obj.id
     return None
