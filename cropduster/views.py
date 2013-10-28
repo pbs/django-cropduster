@@ -10,7 +10,17 @@ from django.shortcuts import render_to_response
 from django.template import RequestContext
 
 from cropduster.models import Image, Crop, Size, SizeSet, ImageMetadata, ImageRegistry
+from filer.models.imagemodels import Image as FilerImage
 from collections import namedtuple
+import utils
+from django.http import HttpResponse, HttpResponseForbidden
+from django.utils.html import escapejs
+
+try:
+    import json
+except:
+    import simplejson as json
+
 
 BROWSER_WIDTH = 800
 
@@ -36,12 +46,12 @@ class ImageForm(ModelForm):
         if not image:
             return image
 
-        if os.path.splitext(image.name)[1] == '':
-            raise ValidationError("Please make sure images have file "
-                                  "extensions before uploading")
+        # if os.path.splitext(image.name)[1] == '':
+        #     raise ValidationError("Please make sure images have file "
+        #                           "extensions before uploading")
 
         try:
-            pil_image = pil.open(image)
+            pil_image = pil.open(image.file)
         except IOError:
             raise ValidationError("Unable to open image file")
         except Exception:
@@ -224,32 +234,31 @@ def upload_image(request, image_form=None, metadata_form=None):
         'is_popup': True,
     }
 
+    context = RequestContext(request, context)
     return render_to_response('admin/upload_image.html', context)
 
 def upload_crop_images(request):
+    if 'size_set_id' in request.session:
+        del request.session['size_set_id']
     size_set = SizeSet.objects.get(id=request.GET['size_set'])
     image = get_image(request)
 
     # We need to inject the size set id into the form data,
     # or we can't validate that the image dimensions are big
     # enough.
-    post = request.POST.copy()
-    post['size_set'] = size_set
-    image_form = ImageForm(post, request.FILES, instance=image)
-    metadata_form = MetadataForm(post, instance=image.metadata)
-    if image_form.is_valid() and metadata_form.is_valid():
-        metadata = metadata_form.save()
-        image = image_form.save()
-        # this works, it's terrible, but it works.
-        image.metadata = metadata
-        image.save()
+    data = request.GET.copy()
+    data['size_set'] = size_set
+    image_form = ImageForm(data, request.FILES, instance=image)
 
+    if image_form.is_valid():
+        image = image_form.save()
+        image.save()
         sizes = apply_size_set(image, size_set)
 
         context = {
             'formset': image_form,
             'browser_width': BROWSER_WIDTH,
-            'image_element_id': request.GET['image_element_id'],
+            'image_element_id': request.GET.get('image_element_id', ''),
             'image': image,
             'sizes': sizes,
             'crops': get_crops(sizes),
@@ -261,19 +270,22 @@ def upload_crop_images(request):
         context = RequestContext(request, context)
         return render_to_response('admin/crop_images.html', context)
 
-    else:
-        return upload_image(request, image_form, metadata_form)
+    width = size_set.size_set.all()[0].width
+    height = size_set.size_set.all()[0].height
+    return HttpResponse(
+        'Image too small. Please select an image larger '
+        'than %spx width and %spx height.' % (width, height))
 
 
 def get_ids(request, index):
-    return (int(i) for i in request.POST['crop_ids_%i' % index].split(','))
+    return (int(i) for i in request.GET['crop_ids_%i' % index].split(','))
 
-def get_crops_from_post(request):
-    total_crops = int(request.POST['total_crops'])
+def get_crops_from_get(request):
+    total_crops = int(request.GET['total_crops'])
     crop_mapping = {}
     for i in xrange(total_crops):
         # Build a crop form
-        cf = CropForm(request.POST, prefix=`i`)
+        cf = CropForm(request.GET, prefix=`i`)
         if cf.is_valid():
             for image_id in get_ids(request, i):
                 crop_mapping[image_id] = cf.instance
@@ -288,35 +300,37 @@ def update_crop(der_image, crop):
     der_image.crop = der_image.crop
 
 def apply_sizes(request):
-    # Get each crop and validate it
-    crop_mapping = get_crops_from_post(request)
+    # Get crop and validate it
+    if not request.is_ajax():
+        return HttpResponseForbidden()
+    crop_mapping = get_crops_from_get(request)
 
     # Get the derived images from the original image.
     image = get_image(request)
 
     # Copy each crop into each image, render, and get the thumbnail.
-    thumbs = []
-    for der_image in image.derived.all():
-        if der_image.id in crop_mapping:
-            update_crop(der_image, crop_mapping[der_image.id])
+    der_image = image.derived.all()[0]
+    if der_image.id in crop_mapping:
+        update_crop(der_image, crop_mapping[der_image.id])
 
+    if (image.image.width == crop_mapping[der_image.id].crop_w and
+        image.image.height == crop_mapping[der_image.id].crop_h):
+        file = image.image
+    else:
         # Render the thumbnail...
-        der_image.render()
-        der_image.save()
+        pil_img = der_image.get_cropped_image()
 
-        # Only show cropped images in the admin.
-        if der_image.id in crop_mapping:
-            thumbs.append(der_image)
+        # der_image.save()
+        file_id = utils.save_cropped_img_to_filer(request, der_image.original, pil_img)
+        file = FilerImage.objects.get(id=file_id)
 
-    context = {
-        'image': image,
-        'image_thumbs': thumbs,
-        'image_element_id': request.GET['image_element_id'],
-        'is_popup': True,
-    }
+    result = {}
+    result['id'] = file.id if file else ''
+    result['chosenThumbnailUrl'] = escapejs(file.icons['32']) if file else ''
+    result['chosenDescriptionTxt'] = escapejs(file.label) if file else ''
+    image.delete()
+    return HttpResponse(json.dumps(result), mimetype="application/json")
 
-    context = RequestContext(request, context)
-    return render_to_response('admin/complete.html', context)
 
 STAGES = {
     'upload': upload_image,
@@ -325,7 +339,7 @@ STAGES = {
 }
 
 def get_next_stage(request):
-    return request.POST.get('next_stage', 'upload')
+    return request.GET.get('next_stage', 'upload')
 
 def dispatch_stage(request):
     stage = get_next_stage(request)
