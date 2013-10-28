@@ -29,7 +29,7 @@ except ImportError:
         pass
     CachingManager = models.Manager
 
-assert not settings.CROPDUSTER_UPLOAD_PATH.startswith('/')
+#assert not settings.CROPDUSTER_UPLOAD_PATH.startswith('/')
 
 nearest_int = lambda a: int(round(a))
 to_retina_path = lambda p: '%s@2x%s' % os.path.splitext(p)
