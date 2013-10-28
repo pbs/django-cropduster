@@ -8,7 +8,7 @@
         var input_id = $container.find('input.cropduster').attr('id');
         var random_attr_id = Math.floor(Math.random() * 0xFFFFFFFF);
         var attr_id = input_id + random_attr_id;
-        $container.find('[data-attr_id]').attr('data-attr_id', attr_id);
+        $container.find('[data-attr_id=""]').attr('data-attr_id', attr_id);
         return attr_id;
     };
 
@@ -37,7 +37,7 @@
 
     window.toggle_delete = function(obj){
         var $container = $(obj).parent().parent().parent().parent();
-        
+
         $container.toggleClass("predelete");
 
         var $input = $(container).find("input.cropduster");
