@@ -1,6 +1,18 @@
 import os
 from PIL import Image, ImageFile
 from django.conf import settings
+from filer.utils.files import (
+    handle_upload, UploadException, matching_file_subtypes
+)
+from filer.models import Clipboard, ClipboardItem
+from django.forms.models import modelform_factory
+from filer import settings as filer_settings
+from filer.models import tools
+from django.core.files.base import ContentFile
+from tempfile import TemporaryFile
+from StringIO import StringIO
+import time
+
 
 # We have to up the max block size for an image when using optimize, or it
 # will blow up
@@ -66,16 +78,16 @@ def normalize_dimensions(img, dimensions, return_ratio=False):
         dst_ratio = float(dst_width) / float(dst_height)
         return (int(dst_width), int(dst_height), dst_ratio)
     else:
-        return (int(dst_width), int(dst_height))    
+        return (int(dst_width), int(dst_height))
 
 
-def create_cropped_image(path=None, x=0, y=0, w=0, h=0):
-    if path is None:
+def create_cropped_image(image=None, x=0, y=0, w=0, h=0):
+    if image is None:
         raise ValueError("A path must be specified")
     if w <= 0 or h <= 0:
         raise ValueError("Width and height must be greater than zero")
 
-    img = Image.open(path)
+    img = Image.open(image.file.file)
     img.load()
     img_format = img.format
     new_img = img.crop((x, y, x + w, y + h))
@@ -164,3 +176,42 @@ def copy_image(image):
     image = image.copy()
     image.format = img_format
     return image
+
+
+def save_cropped_img_to_filer(request, filer_img, cropped_pil_img):
+    timestamp = time.strftime("%Y%m%d%S")
+    filename = 'cropduster_{0}_{1}'.format(
+        timestamp,
+        os.path.basename(filer_img.image.file.name))
+
+    # Get clipboad
+    clipboard = Clipboard.objects.get_or_create(user=request.user)[0]
+    if any(f for f in clipboard.files.all() if f.actual_name == filename):
+        return None
+
+    matched_file_types = matching_file_subtypes(filename, cropped_pil_img,
+                                                request)
+    FileForm = modelform_factory(model=matched_file_types[0],
+        fields=('original_filename', 'owner', 'file')
+    )
+
+    data = StringIO()
+    cropped_pil_img.save(data, cropped_pil_img.format)
+    data.seek(0)
+    file = ContentFile(data.read(), filename)
+    uploadform = FileForm({'original_filename': filename,
+                           'owner': request.user.pk},
+                          {'file': file})
+    if uploadform.is_valid():
+        file_obj = uploadform.save(commit=False)
+        # Enforce the FILER_IS_PUBLIC_DEFAULT
+        file_obj.is_public = filer_settings.FILER_IS_PUBLIC_DEFAULT
+        file_obj.save()
+        clipboard_item = ClipboardItem(clipboard=clipboard, file=file_obj)
+        clipboard_item.save()
+
+        tools.move_files_from_clipboard_to_folder(request, clipboard,
+                                                  filer_img.image.folder)
+        clipboard.files.clear()
+        return file_obj.id
+    return None
