@@ -170,14 +170,18 @@
                 "allowSelect": false,
             });
         });
+        $("body").append('<div class="loading" ><span></span></div>');
+        $('.loading').hide();
         $( "#upload-button").click(function() {
+                 $('body').css('overflow', 'hidden');
                  var frm = $('#content-main form');
-                 $("body").append('<div class="loading" style="height:' + $('body').innerHeight() +'px;"><span></span></div>');
+                 $('.loading').css('height',$('body').innerHeight()).show();
                  $.ajax({
                      url: frm.attr("action"),
                      data: frm.serialize(),
                      success: function (data){
                         window.dismissRelatedImageLookupPopup(window, data.id, data.chosenThumbnailUrl, data.chosenDescriptionTxt);
+
                      },
                      error: function(xhr){
                         window.dismissRelatedImageLookupPopup(window, -1, '', '');
