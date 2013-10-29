@@ -319,9 +319,8 @@ def apply_sizes(request):
     else:
         # Render the thumbnail...
         pil_img = der_image.get_cropped_image()
-
-        # der_image.save()
-        file_id = utils.save_cropped_img_to_filer(request, der_image.original, pil_img)
+        file_id = utils.save_cropped_img_to_filer(
+            request, der_image.original, pil_img)
         file = FilerImage.objects.get(id=file_id)
 
     result = {}
