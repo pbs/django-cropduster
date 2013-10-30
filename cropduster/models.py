@@ -15,8 +15,12 @@ from django.db import models
 from django.db.models.fields.related import ReverseSingleRelatedObjectDescriptor
 from django.conf import settings
 from django.db.models.signals import post_save
-
 from cropduster import utils
+from filer.fields.image import FilerImageField
+from django.utils.translation import ugettext_lazy as _
+from django.contrib.contenttypes.models import ContentType
+from django.contrib.contenttypes import generic
+
 
 try:
     from caching.base import CachingMixin, CachingManager
@@ -25,7 +29,7 @@ except ImportError:
         pass
     CachingManager = models.Manager
 
-assert not settings.CROPDUSTER_UPLOAD_PATH.startswith('/')
+#assert not settings.CROPDUSTER_UPLOAD_PATH.startswith('/')
 
 nearest_int = lambda a: int(round(a))
 to_retina_path = lambda p: '%s@2x%s' % os.path.splitext(p)
@@ -37,7 +41,7 @@ class SizeSet(CachingMixin, models.Model):
     class Meta:
         db_table = 'cropduster_sizeset'
 
-    name = models.CharField(max_length=255, db_index=True)
+    name = models.CharField(max_length=255, db_index=True, unique=True)
     slug = models.SlugField(max_length=50, null=False, unique=True)
 
     def __unicode__(self):
@@ -64,12 +68,12 @@ class Size(CachingMixin, models.Model):
 
     # An Size not associated with a set is a 'one off'
     size_set = models.ForeignKey(SizeSet, null=True)
-    
+
     date_modified = models.DateTimeField(auto_now=True, null=True)
 
-    name = models.CharField(max_length=255, db_index=True)
+    name = models.CharField(max_length=255, db_index=True, default='default')
 
-    slug = models.SlugField(max_length=50, null=False)
+    slug = models.SlugField(max_length=50, null=False, default='default')
 
     height = models.PositiveIntegerField(null=True, blank=True)
 
@@ -216,11 +220,7 @@ class Image(CachingMixin, models.Model):
                                  related_name='derived',
                                  null=True)
 
-    image = models.ImageField(
-        upload_to=lambda obj, filename: obj.cropduster_upload_to(filename),
-        width_field='width',
-        height_field='height',
-        max_length=255)
+    image = FilerImageField(null=True, blank=True, default=None, verbose_name=_("image"))
 
     # An image doesn't need to have a size associated with it, only
     # if we want to transform it.
@@ -337,7 +337,7 @@ class Image(CachingMixin, models.Model):
         path = self._get_tmp_img_path()
         return utils.save_image(image, path)
 
-    def render(self, force=False):
+    def get_cropped_image(self, force=False):
         """
         Renders an image according to its Crop and its Size.  If the size also
         specifies a retina image, it will attempt to render that as well. If a
@@ -377,12 +377,12 @@ class Image(CachingMixin, models.Model):
         # We really only want to do rescalings on derived images, but
         # we don't prevent people from it.
         if self.original:
-            image_path = self.original.image.path
+            image_path = self.original.image.url
         else:
             image_path = self.image.path
 
         if self.crop:
-            image = utils.create_cropped_image(image_path,
+            image = utils.create_cropped_image(self.original.image,
                 self.crop.crop_x,
                 self.crop.crop_y,
                 self.crop.crop_w,
@@ -408,8 +408,7 @@ class Image(CachingMixin, models.Model):
             # Calculate the main image
             image = utils.rescale(image, width, height, size.auto_crop)
 
-        # Save the image in a temporary place
-        self._new_image, self._new_image_format = self._save_to_tmp(image)
+        return image
 
     def _get_tmp_img_path(self):
         """
@@ -642,7 +641,7 @@ class CropDusterReverseProxyDescriptor(ReverseSingleRelatedObjectDescriptor):
         if value is not None and not isinstance(value, self.field.rel.to):
             # ok, are we a direct subclass?
             mro = self.field.rel.to.__mro__
-            if len(mro) > 1 and type(value) == mro[1]: 
+            if len(mro) > 1 and type(value) == mro[1]:
                 # Convert to the appropriate proxy object
                 value.__class__ = self.field.rel.to
 
@@ -662,7 +661,7 @@ class CropDusterField(models.ForeignKey):
         if args and issubclass(args[0], Image):
             base_cls = args[0]
             args = tuple(args[1:])
-        elif 'to' in kwargs and issubclass(kwargs.get('to'), Image): 
+        elif 'to' in kwargs and issubclass(kwargs.get('to'), Image):
             base_cls = kwargs.get('to')
         else:
             base_cls = Image
@@ -681,25 +680,25 @@ class CropDusterField(models.ForeignKey):
             old_upload_to = upload_to
             def upload_to(self, filename, instance=None):
                 new_path = old_upload_to(filename, instance)
-                return os.path.join(settings.CROPDUSTER_UPLOAD_PATH, new_path)
+                return os.path.join(settings.CROPDUSTER_UPLOAD_PATH, filename)
         else:
             raise TypeError("'upload_to' needs to be either a callable or string")
 
         # We have to create a unique class name for each custom proxy image otherwise
         # django likes to alias them together.
-        ProxyImage = type('ProxyImage%i' % next(PROXY_COUNT), 
+        ProxyImage = type('ProxyImage%i' % next(PROXY_COUNT),
                           (base_cls,),
                           {'Meta': type('Meta', (), {'proxy':True}),
                            'cropduster_upload_to': upload_to,
                            '__module__': Image.__module__})
 
         return super(CropDusterField, self).__init__(ProxyImage, *args, **kwargs)
-    
+
     def contribute_to_class(self, cls, name):
         super(CropDusterField, self).contribute_to_class(cls, name)
         setattr(cls, self.name, CropDusterReverseProxyDescriptor(self))
-        
-        if self.dynamic_path: 
+
+        if self.dynamic_path:
             def post_signal(sender, instance, created, *args, **kwargs):
                 cdf = getattr(instance, name, None)
                 if cdf is not None:
@@ -773,7 +772,7 @@ def dynamic_path_save(instance, cdf):
         os.unlink(old_path)
         old_dirs.add( os.path.dirname(old_path) )
 
-    # Files are deleted, delete empty directories, except the upload path... 
+    # Files are deleted, delete empty directories, except the upload path...
     # that would be bad
     for path in reversed(sorted(old_dirs, key=lambda d: d.count('/'))):
         if not os.listdir(path) and path not in settings.MEDIA_ROOT:
@@ -801,3 +800,46 @@ except ImportError:
     pass
 else:
     add_introspection_rules([], ["^cropduster\.models\.CropDusterField"])
+
+
+class ImageContextManager(models.Manager):
+
+    def update(self, model_instance, size_set):
+        img_ctx = self.get_img_ctx(model_instance)
+        if img_ctx:
+            if not size_set:
+                img_ctx.delete()
+            else:
+                img_ctx.size_set_id = size_set.id
+                img_ctx.save()
+        elif size_set:
+            img_ctx = ImageContext(content_object=model_instance,
+                                   size_set=size_set)
+            img_ctx.save()
+
+    def get_img_ctx(self, model_instance):
+        ct = ContentType.objects.get_for_model(model_instance)
+        img_ctx = ImageContext.objects.filter(
+            content_type=ct.id,
+            object_id=model_instance.id) or [None]
+        return img_ctx[0]
+
+    def get_size_set(self, model_instance):
+        img_ctx = self.get_img_ctx(model_instance)
+        return img_ctx.size_set.id if img_ctx else None
+
+
+class ImageContext(models.Model):
+    size_set = models.ForeignKey(SizeSet, blank=True, null=True)
+
+    #The standard fields for a GenericForeignKey.
+    # It may points to whatever model object without
+    # hardcoding the class of the related model
+    content_type = models.ForeignKey(ContentType)
+    object_id = models.PositiveIntegerField()
+    content_object = generic.GenericForeignKey('content_type', 'object_id')
+
+    objects = ImageContextManager()
+
+    class Meta:
+        unique_together = ("content_type", "object_id")

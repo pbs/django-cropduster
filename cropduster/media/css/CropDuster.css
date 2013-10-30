@@ -26,3 +26,24 @@ body.popup #content, body.grp-popup #grp-content {
 #content-main input[type="text"]{
 	width:300px;
 }
+
+.loading{
+    width: 100%;
+    height: 100%;
+    margin:0 auto;
+    display: block;
+    position: absolute;
+    top: 0;
+    left: 0;
+    z-index: 1000;
+    background-color:#000;
+    opacity:.7;
+}
+
+.loading span{
+    background:transparent url(../img/ajax-loader.gif) no-repeat 50% 50% !important;
+    display:block;
+    width:100%;
+    height:100%;
+
+}

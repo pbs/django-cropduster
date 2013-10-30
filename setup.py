@@ -28,7 +28,10 @@ setup(
     zip_safe=False,
     install_requires=[
         'PIL',
+        'Django >= 1.3',
+        'django-filer >= 0.9'
     ],
+    setup_requires=['s3sourceuploader', ],
     include_package_data=True,
     cmdclass={"test": mytest},
     classifiers=[
