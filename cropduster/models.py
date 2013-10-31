@@ -396,15 +396,6 @@ class Image(CachingMixin, models.Model):
             orig_width, orig_height = image.size
             width, height = size.calc_dimensions(orig_width, orig_height)[:2]
 
-            if size.retina:
-                # If we are supposed to build a retina, make sure the
-                # dimensions are large enough.  No stretching allowed!
-                self._new_retina = None
-                if orig_width >= (width * 2) and orig_height >= (height * 2):
-                    retina = utils.rescale(utils.copy_image(image),
-                        width * 2, height * 2, size.auto_crop)
-                    self._new_retina, _fmt = self._save_to_tmp(retina)
-
             # Calculate the main image
             image = utils.rescale(image, width, height, size.auto_crop)
 
