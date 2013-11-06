@@ -3,7 +3,7 @@ from PIL import Image, ImageFile
 from django.conf import settings
 from filer.utils.files import (
     handle_upload, UploadException, matching_file_subtypes
-)
+    )
 from filer.models import Clipboard, ClipboardItem
 from django.forms.models import modelform_factory
 from filer import settings as filer_settings
@@ -11,7 +11,7 @@ from filer.models import tools
 from django.core.files.base import ContentFile
 from tempfile import TemporaryFile
 from StringIO import StringIO
-import time
+import datetime
 
 
 # We have to up the max block size for an image when using optimize, or it
@@ -127,6 +127,8 @@ def rescale_signal(sender, instance, created, max_height=None, max_width=None, *
 
 
 IMAGE_SAVE_PARAMS = {"quality": 85, "optimize": 1}
+
+
 def save_image(image, path):
     """
     Attempts to save an image to the provided path.  If the
@@ -181,10 +183,11 @@ def copy_image(image):
 # filer.admin.cliboardadmin.ClipboardAdmin.ajaxUpload.
 
 def save_cropped_img_to_filer(request, filer_img, cropped_pil_img):
-    timestamp = time.strftime("%Y%m%d%S")
-    filename = 'cropduster_{0}_{1}'.format(
-        timestamp,
-        os.path.basename(filer_img.image.file.name))
+    """
+    Try to save the cropped image as a new filer image instance
+    """
+    timestamp = datetime.datetime.now().strftime("%Y-%m-%d-%H-%M-%S-%f")
+    filename = 'crop_{0}_{1}'.format(timestamp, os.path.basename(filer_img.image.file.name))
 
     # Get clipboad
     clipboard = Clipboard.objects.get_or_create(user=request.user)[0]
@@ -193,19 +196,17 @@ def save_cropped_img_to_filer(request, filer_img, cropped_pil_img):
 
     matched_file_types = matching_file_subtypes(filename, cropped_pil_img,
                                                 request)
-    FileForm = modelform_factory(model=matched_file_types[0],
-        fields=('original_filename', 'owner', 'file')
-    )
+    file_form = modelform_factory(model=matched_file_types[0], fields=('original_filename', 'owner', 'file'))
 
     data = StringIO()
     cropped_pil_img.save(data, cropped_pil_img.format)
     data.seek(0)
     file = ContentFile(data.read(), filename)
-    uploadform = FileForm({'original_filename': filename,
+    upload_form = file_form({'original_filename': filename,
                            'owner': request.user.pk},
                           {'file': file})
-    if uploadform.is_valid():
-        file_obj = uploadform.save(commit=False)
+    if upload_form.is_valid():
+        file_obj = upload_form.save(commit=False)
         # Enforce the FILER_IS_PUBLIC_DEFAULT
         file_obj.is_public = filer_settings.FILER_IS_PUBLIC_DEFAULT
         file_obj.save()
