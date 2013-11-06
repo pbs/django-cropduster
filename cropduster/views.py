@@ -1,24 +1,22 @@
-import os
-import copy
+# coding=utf-8
 from itertools import count
+from collections import namedtuple
 
 from PIL import Image as pil
-
 from django.forms import ModelForm, ValidationError, HiddenInput
 from django.views.decorators.csrf import csrf_exempt
 from django.shortcuts import render_to_response
 from django.template import RequestContext
-
-from cropduster.models import Image, Crop, Size, SizeSet, ImageMetadata, ImageRegistry
-from filer.models.imagemodels import Image as FilerImage
-from collections import namedtuple
-import utils
 from django.http import HttpResponse, HttpResponseForbidden
 from django.utils.html import escapejs
 
+from cropduster.models import Image, Crop, Size, SizeSet, ImageMetadata, ImageRegistry
+from filer.models.imagemodels import Image as FilerImage
+import utils
+
 try:
     import json
-except:
+except ImportError:
     import simplejson as json
 
 
@@ -64,7 +62,7 @@ class ImageForm(ModelForm):
         else:
             img_size = pil_image.size
             for size in size_set.size_set.filter(auto_crop=False):
-                if (img_size[0] < size.width or img_size[1] < size.height):
+                if img_size[0] < size.width or img_size[1] < size.height:
                     (w, h) = img_size[0:2]
                     raise ValidationError((
                         "Uploaded image (%s x %s) is smaller"
@@ -124,7 +122,6 @@ def apply_size_set(image, size_set):
 
 Dimensions = namedtuple('Dimensions', 'width,height,ar')
 def get_inherited_dims(image):
-    o = image.original
     return Dimensions(image.size.get_width(),
                       image.size.get_height(),
                       image.size.get_aspect_ratio())
@@ -300,6 +297,9 @@ def update_crop(der_image, crop):
     der_image.crop = der_image.crop
 
 def apply_sizes(request):
+    """
+    Handle for the 'save' action in the cropduster popup (ajax request)
+    """
     # Get crop and validate it
     if not request.is_ajax():
         return HttpResponseForbidden()
@@ -319,14 +319,13 @@ def apply_sizes(request):
     else:
         # Render the thumbnail...
         pil_img = der_image.get_cropped_image()
-        file_id = utils.save_cropped_img_to_filer(
-            request, der_image.original, pil_img)
+        file_id = utils.save_cropped_img_to_filer(request, der_image.original, pil_img)
         file = FilerImage.objects.get(id=file_id)
 
-    result = {}
-    result['id'] = file.id if file else ''
-    result['chosenThumbnailUrl'] = escapejs(file.icons['32']) if file else ''
-    result['chosenDescriptionTxt'] = escapejs(file.label) if file else ''
+    result = { 'id': file.id if file else '',
+        'chosenThumbnailUrl': escapejs(file.icons['32']) if file else '',
+        'chosenDescriptionTxt': escapejs(file.label) if file else ''
+    }
     image.delete()
     return HttpResponse(json.dumps(result), mimetype="application/json")
 
