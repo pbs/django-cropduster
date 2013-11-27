@@ -7,18 +7,17 @@ from PIL import Image, ImageFile
 from django.conf import settings
 from django.forms.models import modelform_factory
 from django.core.files.base import ContentFile
+from cropduster.settings import FILER_FOLDER_NAME
 
-from filer.utils.files import (
-    matching_file_subtypes
-    )
+from filer.utils.files import matching_file_subtypes
 from filer.models import Clipboard, ClipboardItem
 from filer import settings as filer_settings
-from filer.models import tools
+from filer.models import tools, Folder
 
 
 # We have to up the max block size for an image when using optimize, or it
 # will blow up
-ImageFile.MAXBLOCK = 10000000 # ~10mb
+ImageFile.MAXBLOCK = 10000000  # ~10mb
 
 
 def rescale(img, w=0, h=0, crop=True, **kwargs):
@@ -30,6 +29,7 @@ def rescale(img, w=0, h=0, crop=True, **kwargs):
 
     src_width, src_height = img.size
     src_ratio = float(src_width) / float(src_height)
+
 
     img_format = img.format
     if crop:
@@ -180,9 +180,6 @@ def copy_image(image):
     image.format = img_format
     return image
 
-#Inspired (or adapted, but not copy-pasted) from
-# filer.admin.cliboardadmin.ClipboardAdmin.ajaxUpload.
-
 
 UNKNOWN_EXTENSION = "##invalid##"
 
@@ -270,9 +267,8 @@ def save_cropped_img_to_filer(request, filer_img, cropped_pil_img):
         file_obj.save()
         clipboard_item = ClipboardItem(clipboard=clipboard, file=file_obj)
         clipboard_item.save()
-
-        tools.move_files_from_clipboard_to_folder(request, clipboard,
-                                                  filer_img.image.folder)
+        folder, created = Folder.objects.get_or_create(name=FILER_FOLDER_NAME)
+        tools.move_files_from_clipboard_to_folder(request, clipboard, folder)
         clipboard_item.delete()
         clipboard.files.clear()
         return file_obj.id

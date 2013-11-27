@@ -206,6 +206,7 @@ class ImageMetadata(CachingMixin, models.Model):
     attribution_link = models.URLField(max_length=255, blank=True, null=True)
     caption = models.CharField(max_length=255, blank=True, null=True)
 
+
 class Image(CachingMixin, models.Model):
 
     objects = CachingManager()
