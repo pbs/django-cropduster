@@ -2,4 +2,4 @@
 .DS_Store
 build
 
-django_cropduster.egg-info
+django_cropduster.egg-infoecho .tox
