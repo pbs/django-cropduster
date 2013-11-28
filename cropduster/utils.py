@@ -218,7 +218,7 @@ def compose_filename(filer_img):
     Mark the filer images that were cropped with a naming convention
     """
     timestamp = datetime.datetime.now().strftime("%Y-%m-%d-%H-%M-%S-%f")
-    crt_file_name = os.path.basename(filer_img.image.file.name)
+    crt_file_name = str(filer_img.image.folder) + SEP + os.path.basename(filer_img.image.file.name)
     already_cropped = os.path.basename(filer_img.image.file.name).startswith(CROP)
 
     if not already_cropped:
