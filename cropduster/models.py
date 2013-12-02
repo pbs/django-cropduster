@@ -820,13 +820,16 @@ class ImageContextManager(models.Manager):
         img_ctx = self.get_img_ctx(model_instance)
         return img_ctx.size_set.id if img_ctx else None
 
+    def get_by_object_id(self, obj_id):
+        return self.filter(object_id=obj_id)
+
 
 class ImageContext(models.Model):
     size_set = models.ForeignKey(SizeSet, blank=True, null=True)
 
-    #The standard fields for a GenericForeignKey.
+    # The standard fields for a GenericForeignKey.
     # It may points to whatever model object without
-    # hardcoding the class of the related model
+    # hard-coding the class of the related model
     content_type = models.ForeignKey(ContentType)
     object_id = models.PositiveIntegerField()
     content_object = generic.GenericForeignKey('content_type', 'object_id')
