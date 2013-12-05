@@ -315,18 +315,21 @@ def apply_sizes(request):
 
     if (image.image.width == crop_mapping[der_image.id].crop_w and
         image.image.height == crop_mapping[der_image.id].crop_h):
-        file = image.image
+        _file = image.image
     else:
         # Save the image to filer
         pil_img = der_image.get_cropped_image()
         file_id = utils.save_cropped_img_to_filer(request, der_image.original, pil_img)
-        file = FilerImage.objects.get(id=file_id)
+        _file = FilerImage.objects.get(id=file_id)
 
-    result = { 'id': file.id if file else '',
-        'chosenThumbnailUrl': escapejs(file.icons['32']) if file else '',
-        'chosenDescriptionTxt': escapejs(file.label) if file else ''
+    result = { 'id': _file.id if _file else '',
+        'chosenThumbnailUrl': escapejs(_file.icons['32']) if _file else '',
+        'chosenDescriptionTxt': escapejs(_file.label) if _file else ''
     }
+    # clean: crop-duster persists objects by default, but we don't need them *all* persisted
     image.delete()
+    ImageMetadata.objects.all().delete()
+    Crop.objects.all().delete()
     return HttpResponse(json.dumps(result), mimetype="application/json")
 
 
